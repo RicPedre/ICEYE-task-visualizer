@@ -1,6 +1,6 @@
 ﻿# ICEYE Task Visualizer
 
-A zero-backend, client-side web application to evaluate, filter, and plan satellite SAR acquisition opportunities from **ICEYE** feasibility studies. Includes interactive geospatial visualization, Gantt scheduling, and InSAR baseline / cross-geometry pair analysis.
+A zero-backend, client-side web application to evaluate, filter, and plan satellite SAR acquisition opportunities from **ICEYE** feasibility studies. Includes interactive geospatial visualization, Gantt scheduling, and stereo / cross-geometry pair analysis.
 
 ## 🛰️ Key Features
 
