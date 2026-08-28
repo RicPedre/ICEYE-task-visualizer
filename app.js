@@ -49,6 +49,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupImportModalHandlers();
   await loadDataset();
 
+  // On first launch / GitHub version, invite user to drag & drop files
+  const savedCampaigns = getSavedCampaigns();
+  if (Object.keys(savedCampaigns).length === 0) {
+    const modalImport = document.getElementById('modal-import');
+    if (modalImport) modalImport.style.display = 'flex';
+  }
+
   // Fetch JSON Dataset or Load Saved Campaign
   async function loadDataset(campaignId = 'default') {
     try {
@@ -1388,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const ws = XLSX.utils.aoa_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Network_Pairs');
-        XLSX.writeFile(wb, `AETHEL_Network_Pairs_${new Date().toISOString().substring(0, 10)}.xlsx`);
+        XLSX.writeFile(wb, `ICEYE_Network_Pairs_${new Date().toISOString().substring(0, 10)}.xlsx`);
         return;
       } catch (err) {
         console.warn('XLSX export failed, falling back to direct Excel CSV:', err);
@@ -1401,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `AETHEL_Network_Pairs_${new Date().toISOString().substring(0, 10)}.csv`);
+    link.setAttribute('download', `ICEYE_Network_Pairs_${new Date().toISOString().substring(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -2029,7 +2036,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function getSavedCampaigns() {
     try {
-      const raw = localStorage.getItem('aethel_custom_campaigns');
+      const raw = localStorage.getItem('iceye_custom_campaigns') || localStorage.getItem('aethel_custom_campaigns');
       return raw ? JSON.parse(raw) : {};
     } catch(e) { return {}; }
   }
@@ -2038,14 +2045,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const campaigns = getSavedCampaigns();
       campaigns[id] = campaignData;
-      localStorage.setItem('aethel_custom_campaigns', JSON.stringify(campaigns));
+      localStorage.setItem('iceye_custom_campaigns', JSON.stringify(campaigns));
     } catch(e) { console.error('Error saving campaign to localStorage:', e); }
   }
 
   function updateCampaignSelectDropdown(selectedId = 'default') {
     const select = document.getElementById('select-campaign');
     if (!select) return;
-    select.innerHTML = '<option value="default">Default: Aletsch Glacier Region</option>';
+    const defaultLabel = (data && data.metadata && data.metadata.aoi_name) ? data.metadata.aoi_name : 'Default Campaign';
+    select.innerHTML = `<option value="default">${defaultLabel}</option>`;
     
     const saved = getSavedCampaigns();
     for (let key in saved) {
@@ -2333,6 +2341,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnCloseImport) btnCloseImport.addEventListener('click', closeModal);
     if (btnCancelImport) btnCancelImport.addEventListener('click', closeModal);
 
+    const btnLoadDemo = document.getElementById('btn-load-demo-import');
+    if (btnLoadDemo) {
+      btnLoadDemo.addEventListener('click', () => {
+        closeModal();
+        loadDataset('default');
+      });
+    }
+
     if (dropExcel && fileExcel) {
       dropExcel.addEventListener('click', () => fileExcel.click());
       fileExcel.addEventListener('change', (e) => {
@@ -2348,6 +2364,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       setupDragDrop(dropKml, (file) => handleKmlSelected(file));
     }
+
+    // Window level drag & drop to easily open modal
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        if (modalImport && modalImport.style.display !== 'flex') {
+          modalImport.style.display = 'flex';
+        }
+        Array.from(e.dataTransfer.files).forEach(f => {
+          const name = f.name.toLowerCase();
+          if (name.endsWith('.xlsx') || name.endsWith('.xls') || (name.endsWith('.xml') && !name.includes('aoi'))) {
+            handleExcelSelected(f);
+          } else if (name.endsWith('.kml')) {
+            handleKmlSelected(f);
+          } else if (name.endsWith('.geojson') || name.endsWith('.json')) {
+            importFiles.aoiPoly = f;
+          }
+        });
+      }
+    });
 
     if (fileAoiPoly) {
       fileAoiPoly.addEventListener('change', (e) => {

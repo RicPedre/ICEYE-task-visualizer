@@ -147,7 +147,7 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, output
         [round(min_lon, 5), round(min_lat, 5)]
     ]
 
-    final_aoi_name = aoi_name if aoi_name else "Aletsch Glacier Region" if "Aletsch" in excel_path or "CS-27201" in excel_path else "Campaign Region"
+    final_aoi_name = aoi_name if aoi_name else "Area of Interest (AOI)"
 
     output_data = {
         "metadata": {

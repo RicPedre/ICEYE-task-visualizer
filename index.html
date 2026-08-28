@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AETHEL-GIS // Satellite Acquisition Feasibility Evaluator</title>
+  <title>ICEYE Task Visualizer</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   
   <!-- App Styles -->
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
   
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -17,7 +17,7 @@
   <!-- Turf.js for Spatial Geodesic Polygon Intersections -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
-  <!-- SheetJS for Excel (.xlsx) Generation -->
+  <!-- SheetJS for Excel (.xlsx) Generation & Parsing -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- Chart.js -->
@@ -34,8 +34,8 @@
         </svg>
       </div>
       <div>
-        <h1 class="brand-title">AETHEL-GIS // Acquisition Evaluator</h1>
-        <div class="brand-subtitle" id="brand-subtitle">Area of Interest: Aletsch Glacier Feasibility Study</div>
+        <h1 class="brand-title">ICEYE Task Visualizer</h1>
+        <div class="brand-subtitle" id="brand-subtitle">Area of Interest: Feasibility Campaign</div>
       </div>
     </div>
 
@@ -55,7 +55,7 @@
       </div>
       <div class="kpi-card">
         <span class="kpi-label">Active Date Window</span>
-        <span class="kpi-value" id="kpi-date-window" style="font-size: 0.82rem; color: #a5b4fc;">23 Aug - 05 Sep</span>
+        <span class="kpi-value" id="kpi-date-window" style="font-size: 0.82rem; color: #a5b4fc;">-</span>
       </div>
     </div>
 
@@ -63,7 +63,7 @@
     <div class="header-actions">
       <div class="campaign-selector-wrapper" style="position: relative;">
         <select id="select-campaign" class="campaign-select" title="Switch active campaign">
-          <option value="default">Default: Aletsch Glacier Region</option>
+          <option value="default">Default Campaign</option>
         </select>
       </div>
       <button class="btn btn-accent" id="btn-compare" disabled>
@@ -439,17 +439,17 @@
         </div>
 
         <div class="import-dropzones">
-          <!-- Excel Dropzone -->
+          <!-- Excel / XML Dropzone -->
           <div class="dropzone" id="dropzone-excel">
-            <input type="file" id="file-excel" accept=".xlsx, .xls" style="display: none;">
+            <input type="file" id="file-excel" accept=".xlsx, .xls, .xml" style="display: none;">
             <div class="dropzone-icon">📊</div>
-            <div class="dropzone-title">Excel Feasibility Report (.xlsx) <span class="required-badge">*Required</span></div>
+            <div class="dropzone-title">Feasibility Table (.xlsx / .xml) <span class="required-badge">*Required</span></div>
             <div class="dropzone-sub" id="label-excel-status">Drag &amp; drop or click to browse</div>
           </div>
 
           <!-- KML Dropzone -->
           <div class="dropzone" id="dropzone-kml">
-            <input type="file" id="file-kml" accept=".kml" style="display: none;">
+            <input type="file" id="file-kml" accept=".kml, .xml" style="display: none;">
             <div class="dropzone-icon">🗺️</div>
             <div class="dropzone-title">Swaths Polygon KML (.kml) <span class="optional-badge">Optional</span></div>
             <div class="dropzone-sub" id="label-kml-status">Drag &amp; drop or click to browse</div>
@@ -463,11 +463,16 @@
 
         <div id="import-status-msg" class="import-status-msg" style="display: none;"></div>
 
-        <div class="import-actions">
-          <button class="btn" id="btn-cancel-import">Cancel</button>
-          <button class="btn btn-primary" id="btn-submit-import">
-            ⚡ Parse &amp; Launch Campaign
+        <div class="import-actions" style="display: flex; justify-content: space-between; align-items: center;">
+          <button class="link-btn" id="btn-load-demo-import" type="button" style="color: #38bdf8; font-size: 0.8rem; background: none; border: none; cursor: pointer; text-decoration: underline;">
+            Preview with Demo Campaign
           </button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn" id="btn-cancel-import">Close</button>
+            <button class="btn btn-primary" id="btn-submit-import">
+              ⚡ Parse &amp; Launch Campaign
+            </button>
+          </div>
         </div>
       </div>
     </div>
