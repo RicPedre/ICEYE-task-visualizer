@@ -2,28 +2,8 @@
   "metadata": {
     "total_count": 124,
     "aoi_name": "Area of Interest (AOI)",
-    "aoi_polygon": [
-      [
-        7.965,
-        46.37
-      ],
-      [
-        8.095,
-        46.37
-      ],
-      [
-        8.095,
-        46.437
-      ],
-      [
-        7.965,
-        46.437
-      ],
-      [
-        7.965,
-        46.37
-      ]
-    ],
+    "aoi_polygon": null,
+    "has_custom_aoi": false,
     "bounds": {
       "min_lat": 46.37,
       "max_lat": 46.437,

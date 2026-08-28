@@ -61,11 +61,10 @@
 
     <!-- Header Actions -->
     <div class="header-actions">
-      <div class="campaign-selector-wrapper" style="position: relative;">
-        <select id="select-campaign" class="campaign-select" title="Switch active campaign">
-          <option value="default">Default Campaign</option>
-        </select>
-      </div>
+      <button class="btn" id="btn-clear-selection" disabled title="Clear all selected opportunities">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        Clear Selection
+      </button>
       <button class="btn btn-accent" id="btn-compare" disabled>
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
         Compare Selected (<span id="compare-count">0</span>)
@@ -99,9 +98,9 @@
         <div class="filter-title" style="margin-bottom: 8px;">Quick Presets</div>
         <div class="preset-grid">
           <button class="chip-btn" id="preset-100cov">100% Coverage</button>
-          <button class="chip-btn" id="preset-lowlook">Look Angle &le; 25°</button>
-          <button class="chip-btn asc" id="preset-asc-left">Ascending Left 🟣👈</button>
-          <button class="chip-btn desc" id="preset-desc-right">Descending Right 🟢👉</button>
+          <button class="chip-btn" id="preset-highlook">Look Angle &ge; 30°</button>
+          <button class="chip-btn" id="preset-west-looking" title="Ascending Left + Descending Right (Look West)">West Looking (Asc L / Desc R)</button>
+          <button class="chip-btn" id="preset-east-looking" title="Ascending Right + Descending Left (Look East)">East Looking (Asc R / Desc L)</button>
         </div>
       </div>
 

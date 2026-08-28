@@ -4,7 +4,7 @@ import argparse
 import pandas as pd
 import xml.etree.ElementTree as ET
 
-def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, output_json="acquisitions_data.json", output_js="data_embedded.js"):
+def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_polygon=None, output_json="acquisitions_data.json", output_js="data_embedded.js"):
     if not excel_path:
         excel_path = "CS-27201 Spot 23 Aug - 5 Sep_FeasibilityStudy.xlsx"
     if not kml_path:
@@ -138,22 +138,14 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, output
         }
         features.append(feature)
         
-    # Auto-calculate AOI polygon if not specified (bounding box envelope)
-    aoi_polygon = [
-        [round(min_lon, 5), round(min_lat, 5)],
-        [round(max_lon, 5), round(min_lat, 5)],
-        [round(max_lon, 5), round(max_lat, 5)],
-        [round(min_lon, 5), round(max_lat, 5)],
-        [round(min_lon, 5), round(min_lat, 5)]
-    ]
-
     final_aoi_name = aoi_name if aoi_name else "Area of Interest (AOI)"
 
     output_data = {
         "metadata": {
             "total_count": len(opportunities),
             "aoi_name": final_aoi_name,
-            "aoi_polygon": aoi_polygon,
+            "aoi_polygon": aoi_polygon if aoi_polygon else None,
+            "has_custom_aoi": bool(aoi_polygon),
             "bounds": {
                 "min_lat": round(min_lat, 4),
                 "max_lat": round(max_lat, 4),

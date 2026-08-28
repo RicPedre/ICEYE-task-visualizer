@@ -565,6 +565,7 @@ body {
 .drawer-tab-content.active {
   display: block;
   height: calc(100% - 38px);
+  overflow-y: auto;
 }
 
 /* Timeline Container */
@@ -573,7 +574,8 @@ body {
   height: 100%;
   padding: 12px 16px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 /* Data Table Styling */

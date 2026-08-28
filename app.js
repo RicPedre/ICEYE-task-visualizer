@@ -198,7 +198,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     aoiLayerGroup.clearLayers();
-    if (data.metadata.aoi_polygon) {
+    const hasAoi = data.metadata.has_custom_aoi && data.metadata.aoi_polygon && data.metadata.aoi_polygon.length > 0;
+    const toggleAoiBtn = document.getElementById('toggle-aoi');
+    if (toggleAoiBtn) {
+      toggleAoiBtn.style.display = hasAoi ? 'inline-block' : 'none';
+    }
+
+    if (hasAoi) {
       const aoiCoords = data.metadata.aoi_polygon.map(pt => [pt[1], pt[0]]);
       const aoiPoly = L.polygon(aoiCoords, {
         color: '#06b6d4',
@@ -382,6 +388,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('val-date-range').textContent = `${activeFilters.startDate} to ${activeFilters.endDate}`;
 
     document.getElementById('btn-compare').disabled = selectedIds.size === 0;
+    const btnClear = document.getElementById('btn-clear-selection');
+    if (btnClear) btnClear.disabled = selectedIds.size === 0;
   }
 
   // Helper: Combo Badge CSS Class
@@ -512,7 +520,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     daysHeader.style.borderBottom = '1px solid var(--border-light)';
     daysHeader.style.paddingBottom = '6px';
     daysHeader.style.marginBottom = '8px';
-    daysHeader.style.position = 'relative';
+    daysHeader.style.position = 'sticky';
+    daysHeader.style.top = '-10px';
+    daysHeader.style.background = '#0d1320';
+    daysHeader.style.zIndex = '10';
     daysHeader.style.height = '24px';
 
     const cur = new Date(tStart);
@@ -1583,33 +1594,47 @@ document.addEventListener('DOMContentLoaded', async () => {
       applyFilters();
     });
 
-    const presetLowLook = document.getElementById('preset-lowlook');
-    if (presetLowLook && numLookMax && sliderLookMax) {
-      presetLowLook.addEventListener('click', () => {
-        numLookMax.value = 25;
-        sliderLookMax.value = 25;
-        activeFilters.lookMax = 25;
+    const presetHighLook = document.getElementById('preset-highlook') || document.getElementById('preset-lowlook');
+    if (presetHighLook && numLookMin && sliderLookMin) {
+      presetHighLook.addEventListener('click', () => {
+        numLookMin.value = 30;
+        sliderLookMin.value = 30;
+        activeFilters.lookMin = 30;
         syncLookAngle();
       });
     }
 
-    document.getElementById('preset-asc-left').addEventListener('click', () => {
-      activeFilters.combos = new Set(['ASCENDING - LEFT']);
-      document.querySelectorAll('#combo-badge-group .combo-btn').forEach(b => {
-        if (b.dataset.combo === 'ASCENDING - LEFT') b.classList.add('active');
-        else b.classList.remove('active');
+    const presetWestLooking = document.getElementById('preset-west-looking') || document.getElementById('preset-asc-left');
+    if (presetWestLooking) {
+      presetWestLooking.addEventListener('click', () => {
+        activeFilters.combos = new Set(['ASCENDING - LEFT', 'DESCENDING - RIGHT']);
+        document.querySelectorAll('#combo-badge-group .combo-btn').forEach(b => {
+          const combo = b.dataset.combo;
+          if (combo === 'ASCENDING - LEFT' || combo === 'DESCENDING - RIGHT') {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+        applyFilters();
       });
-      applyFilters();
-    });
+    }
 
-    document.getElementById('preset-desc-right').addEventListener('click', () => {
-      activeFilters.combos = new Set(['DESCENDING - RIGHT']);
-      document.querySelectorAll('#combo-badge-group .combo-btn').forEach(b => {
-        if (b.dataset.combo === 'DESCENDING - RIGHT') b.classList.add('active');
-        else b.classList.remove('active');
+    const presetEastLooking = document.getElementById('preset-east-looking') || document.getElementById('preset-desc-right');
+    if (presetEastLooking) {
+      presetEastLooking.addEventListener('click', () => {
+        activeFilters.combos = new Set(['ASCENDING - RIGHT', 'DESCENDING - LEFT']);
+        document.querySelectorAll('#combo-badge-group .combo-btn').forEach(b => {
+          const combo = b.dataset.combo;
+          if (combo === 'ASCENDING - RIGHT' || combo === 'DESCENDING - LEFT') {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+        applyFilters();
       });
-      applyFilters();
-    });
+    }
 
     // Reset All Filters
     document.getElementById('btn-reset-filters').addEventListener('click', () => {
@@ -1885,6 +1910,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateKPIs();
         renderMapSwaths();
         renderTable();
+        renderGanttTimeline();
+        renderNetworkChart();
+      });
+    }
+
+    // Clear Selection Button
+    const btnClearSelection = document.getElementById('btn-clear-selection');
+    if (btnClearSelection) {
+      btnClearSelection.addEventListener('click', () => {
+        selectedIds.clear();
+        const chkAll = document.getElementById('chk-select-all');
+        if (chkAll) chkAll.checked = false;
+        updateKPIs();
+        renderMapSwaths();
+        renderTable();
+        renderGanttTimeline();
         renderNetworkChart();
       });
     }
@@ -2269,19 +2310,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     });
 
-    const aoiPoly = customAoiPoly || [
-      [Math.round(min_lon * 100000) / 100000, Math.round(min_lat * 100000) / 100000],
-      [Math.round(max_lon * 100000) / 100000, Math.round(min_lat * 100000) / 100000],
-      [Math.round(max_lon * 100000) / 100000, Math.round(max_lat * 100000) / 100000],
-      [Math.round(min_lon * 100000) / 100000, Math.round(max_lat * 100000) / 100000],
-      [Math.round(min_lon * 100000) / 100000, Math.round(min_lat * 100000) / 100000]
-    ];
+    const aoiPoly = customAoiPoly || null;
 
     return {
       metadata: {
         total_count: opportunities.length,
         aoi_name: customAoiName || 'Campaign Region',
         aoi_polygon: aoiPoly,
+        has_custom_aoi: !!customAoiPoly,
         bounds: {
           min_lat: Math.round(min_lat * 10000) / 10000,
           max_lat: Math.round(max_lat * 10000) / 10000,
