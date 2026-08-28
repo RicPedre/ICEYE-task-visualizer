@@ -2,7 +2,7 @@
 
 A zero-backend, client-side web application to evaluate, filter, and plan satellite SAR acquisition opportunities from **ICEYE** feasibility studies. Includes interactive geospatial visualization, Gantt scheduling, and stereo / cross-geometry pair analysis.
 
-Link to the website: https://ricpedre.github.io/ICEYE-task-visualizer/[https://ricpedre.github.io/ICEYE-task-visualizer/]
+Link to the website: https://ricpedre.github.io/ICEYE-task-visualizer/
 
 ## 🛰️ Key Features
 
