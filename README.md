@@ -2,34 +2,6 @@
 
 A zero-backend, client-side web application to evaluate, filter, and plan satellite SAR acquisition opportunities from **ICEYE** feasibility studies. Includes interactive geospatial visualization, Gantt scheduling, and InSAR baseline / cross-geometry pair analysis.
 
----
-
-## 🚀 Live Demo / GitHub Pages Setup
-
-This application is **100% static client-side** (HTML5, Vanilla JavaScript, CSS3, Leaflet, Turf.js, SheetJS). It requires **no backend server or build process**.
-
-### Steps to Host on GitHub Pages:
-
-1. **Push this repository to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Deploy ICEYE Task Visualizer"
-   git push origin main
-   ```
-
-2. **Enable GitHub Pages**:
-   * Open your repository on [GitHub](https://github.com).
-   * Go to **Settings** > **Pages** (in the left sidebar).
-   * Under **Build and deployment** > **Source**, select **`Deploy from a branch`**.
-   * Under **Branch**, select **`main`** and folder **`/ (root)`**.
-   * Click **Save**.
-
-3. **Open your Live App**:
-   * Within 1–2 minutes, GitHub will publish your site at:
-     `https://<your-username>.github.io/<repo-name>/`
-
----
-
 ## 🛰️ Key Features
 
 - **📂 Client-Side Ingestion (Zero Upload to Servers)**:
