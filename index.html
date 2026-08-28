@@ -43,11 +43,11 @@
     <div class="header-kpis">
       <div class="kpi-card">
         <span class="kpi-label">Total Opportunities</span>
-        <span class="kpi-value" id="kpi-total">124</span>
+        <span class="kpi-value" id="kpi-total">0</span>
       </div>
       <div class="kpi-card">
         <span class="kpi-label">Filtered Matches</span>
-        <span class="kpi-value highlight" id="kpi-filtered">124</span>
+        <span class="kpi-value highlight" id="kpi-filtered">0</span>
       </div>
       <div class="kpi-card">
         <span class="kpi-label">Selected for Acquire</span>
@@ -252,7 +252,7 @@
             </button>
             <button class="tab-btn" data-tab="tab-table">
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              Opportunity Table (<span id="table-count">124</span>)
+              Opportunity Table (<span id="table-count">0</span>)
             </button>
           </div>
 
@@ -462,16 +462,11 @@
 
         <div id="import-status-msg" class="import-status-msg" style="display: none;"></div>
 
-        <div class="import-actions" style="display: flex; justify-content: space-between; align-items: center;">
-          <button class="link-btn" id="btn-load-demo-import" type="button" style="color: #38bdf8; font-size: 0.8rem; background: none; border: none; cursor: pointer; text-decoration: underline;">
-            Preview with Demo Campaign
+        <div class="import-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+          <button class="btn" id="btn-cancel-import">Close</button>
+          <button class="btn btn-primary" id="btn-submit-import">
+            ⚡ Parse &amp; Launch Campaign
           </button>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn" id="btn-cancel-import">Close</button>
-            <button class="btn btn-primary" id="btn-submit-import">
-              ⚡ Parse &amp; Launch Campaign
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -480,10 +475,7 @@
   <!-- Interactive Floating Chart Tooltip -->
   <div id="chart-floating-tooltip" class="chart-floating-tooltip"></div>
 
-  <!-- Embedded Data for Instant Zero-CORS Loading -->
-  <script src="data_embedded.js?v=11"></script>
-
   <!-- App Script -->
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

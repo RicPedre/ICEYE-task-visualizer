@@ -49,36 +49,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupImportModalHandlers();
   await loadDataset();
 
-  // On first launch / GitHub version, invite user to drag & drop files
+  // On launch, invite user to drag & drop files if no dataset is active
   const savedCampaigns = getSavedCampaigns();
   if (Object.keys(savedCampaigns).length === 0) {
     const modalImport = document.getElementById('modal-import');
     if (modalImport) modalImport.style.display = 'flex';
   }
 
-  // Fetch JSON Dataset or Load Saved Campaign
-  async function loadDataset(campaignId = 'default') {
+  // Load active campaign or start with clean empty state
+  async function loadDataset(campaignId = null) {
     try {
-      if (campaignId !== 'default') {
-        const saved = getSavedCampaigns();
-        if (saved[campaignId]) {
-          data = saved[campaignId];
-        } else {
-          campaignId = 'default';
-        }
+      const saved = getSavedCampaigns();
+      const savedKeys = Object.keys(saved);
+
+      if (campaignId && saved[campaignId]) {
+        data = saved[campaignId];
+      } else if (savedKeys.length > 0) {
+        data = saved[savedKeys[savedKeys.length - 1]];
+      } else {
+        // Clean empty state (No default campaign preloaded)
+        data = {
+          metadata: {
+            total_count: 0,
+            aoi_name: 'No Campaign Loaded (Import files to begin)',
+            bounds: { min_lat: -40, max_lat: 60, min_lon: -100, max_lon: 100 },
+            date_range: [new Date().toISOString().substring(0, 10), new Date().toISOString().substring(0, 10)],
+            incid_range: [15, 40],
+            oza_range: [0, 50],
+            sza_range: [0, 90],
+            azimuth_range: [0, 360],
+            coverage_range: [0, 100],
+            pass_look_combos: ['ASCENDING - LEFT', 'ASCENDING - RIGHT', 'DESCENDING - LEFT', 'DESCENDING - RIGHT']
+          },
+          geojson: { type: "FeatureCollection", features: [] },
+          opportunities: []
+        };
       }
 
-      if (campaignId === 'default') {
-        if (window.ACQUISITIONS_EMBEDDED_DATA) {
-          data = window.ACQUISITIONS_EMBEDDED_DATA;
-        } else {
-          const response = await fetch('acquisitions_data.json?v=' + Date.now());
-          if (!response.ok) throw new Error('Network response was not ok');
-          data = await response.json();
-        }
-      }
-
-      allOpportunities = data.opportunities;
+      allOpportunities = data.opportunities || [];
       filteredOpportunities = [...allOpportunities];
       
       adaptUIForDataset(data);
@@ -94,17 +102,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       setupEventListeners();
     } catch (err) {
       console.error('Error loading dataset:', err);
-      if (window.ACQUISITIONS_EMBEDDED_DATA) {
-        data = window.ACQUISITIONS_EMBEDDED_DATA;
-        allOpportunities = data.opportunities;
-        filteredOpportunities = [...allOpportunities];
-        adaptUIForDataset(data);
-        if (!map) initMap(); else updateMapForDataset();
-        applyFilters();
-        setupEventListeners();
-      } else {
-        alert('Could not load acquisitions_data.json. Please ensure server.py or parse_data.py has run.');
-      }
     }
   }
 
@@ -190,7 +187,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateMapForDataset() {
     if (!map || !data || !data.metadata) return;
     const bounds = data.metadata.bounds;
-    if (bounds && bounds.min_lat && bounds.max_lat) {
+    const hasData = allOpportunities && allOpportunities.length > 0;
+    if (hasData && bounds && bounds.min_lat && bounds.max_lat) {
       map.fitBounds([
         [bounds.min_lat, bounds.min_lon],
         [bounds.max_lat, bounds.max_lon]
@@ -222,13 +220,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize Leaflet GIS Map
   function initMap() {
-    const bounds = data.metadata.bounds;
-    const centerLat = (bounds.min_lat + bounds.max_lat) / 2;
-    const centerLon = (bounds.min_lon + bounds.max_lon) / 2;
+    const bounds = data && data.metadata && data.metadata.bounds;
+    const hasData = allOpportunities && allOpportunities.length > 0;
+    const centerLat = (bounds && hasData) ? (bounds.min_lat + bounds.max_lat) / 2 : 25;
+    const centerLon = (bounds && hasData) ? (bounds.min_lon + bounds.max_lon) / 2 : 10;
+    const initialZoom = hasData ? 12 : 2;
 
     map = L.map('map', {
       center: [centerLat, centerLon],
-      zoom: 12,
+      zoom: initialZoom,
       zoomControl: false
     });
 
