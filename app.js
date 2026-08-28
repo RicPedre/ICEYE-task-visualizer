@@ -2377,14 +2377,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnCloseImport) btnCloseImport.addEventListener('click', closeModal);
     if (btnCancelImport) btnCancelImport.addEventListener('click', closeModal);
 
-    const btnLoadDemo = document.getElementById('btn-load-demo-import');
-    if (btnLoadDemo) {
-      btnLoadDemo.addEventListener('click', () => {
-        closeModal();
-        loadDataset('default');
-      });
-    }
-
     if (dropExcel && fileExcel) {
       dropExcel.addEventListener('click', () => fileExcel.click());
       fileExcel.addEventListener('change', (e) => {
