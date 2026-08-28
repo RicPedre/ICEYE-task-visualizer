@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETHEL-GIS // Satellite Acquisition Feasibility Evaluator</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- App Styles -->
+  <link rel="stylesheet" href="styles.css?v=11">
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Turf.js for Spatial Geodesic Polygon Intersections -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- SheetJS for Excel (.xlsx) Generation -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- ==================== APP HEADER ==================== -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2v1a2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V11a2 2 0 012-2h1.065M12 2a10 10 0 100 20 10 10 0 000-20z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">AETHEL-GIS // Acquisition Evaluator</h1>
+        <div class="brand-subtitle" id="brand-subtitle">Area of Interest: Aletsch Glacier Feasibility Study</div>
+      </div>
+    </div>
+
+    <!-- Header KPI Cards -->
+    <div class="header-kpis">
+      <div class="kpi-card">
+        <span class="kpi-label">Total Opportunities</span>
+        <span class="kpi-value" id="kpi-total">124</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Filtered Matches</span>
+        <span class="kpi-value highlight" id="kpi-filtered">124</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Selected for Acquire</span>
+        <span class="kpi-value" id="kpi-selected">0</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Active Date Window</span>
+        <span class="kpi-value" id="kpi-date-window" style="font-size: 0.82rem; color: #a5b4fc;">23 Aug - 05 Sep</span>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <div class="campaign-selector-wrapper" style="position: relative;">
+        <select id="select-campaign" class="campaign-select" title="Switch active campaign">
+          <option value="default">Default: Aletsch Glacier Region</option>
+        </select>
+      </div>
+      <button class="btn btn-accent" id="btn-compare" disabled>
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        Compare Selected (<span id="compare-count">0</span>)
+      </button>
+      <button class="btn" id="btn-export-menu">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        Export...
+      </button>
+      <button class="btn btn-primary" id="btn-upload">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+        Import Data
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN BODY ==================== -->
+  <div class="app-body">
+
+    <!-- LEFT SIDEBAR FILTERS -->
+    <aside class="filter-sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+          Filter Criteria
+        </span>
+        <button class="reset-btn" id="btn-reset-filters">Reset All</button>
+      </div>
+
+      <!-- Quick Presets -->
+      <div class="filter-group presets-section">
+        <div class="filter-title" style="margin-bottom: 8px;">Quick Presets</div>
+        <div class="preset-grid">
+          <button class="chip-btn" id="preset-100cov">100% Coverage</button>
+          <button class="chip-btn" id="preset-lowlook">Look Angle &le; 25°</button>
+          <button class="chip-btn asc" id="preset-asc-left">Ascending Left 🟣👈</button>
+          <button class="chip-btn desc" id="preset-desc-right">Descending Right 🟢👉</button>
+        </div>
+      </div>
+
+      <!-- Orbit Pass & Look Direction Combinations -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Orbit Pass &amp; Look Combinations</span>
+        </div>
+        <div class="badge-group" id="combo-badge-group">
+          <button class="chip-btn combo-btn asc active" data-combo="ASCENDING - LEFT">🟣 ASCENDING - LEFT</button>
+          <button class="chip-btn combo-btn asc active" data-combo="ASCENDING - RIGHT">🟣 ASCENDING - RIGHT</button>
+          <button class="chip-btn combo-btn desc active" data-combo="DESCENDING - LEFT">🟢 DESCENDING - LEFT</button>
+          <button class="chip-btn combo-btn desc active" data-combo="DESCENDING - RIGHT">🟢 DESCENDING - RIGHT</button>
+        </div>
+      </div>
+
+      <!-- Specific Date Range Filter -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Acquisition Date Range</span>
+          <span class="filter-val-badge" id="val-date-range">2026-08-23 to 2026-09-05</span>
+        </div>
+        <div class="range-container">
+          <div class="date-input-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <div style="flex: 1;">
+              <label style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 2px;">From:</label>
+              <input type="date" id="date-start" class="date-picker-input" value="2026-08-23" min="2026-08-23" max="2026-09-05">
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 2px;">To:</label>
+              <input type="date" id="date-end" class="date-picker-input" value="2026-09-05" min="2026-08-23" max="2026-09-05">
+            </div>
+          </div>
+          <!-- Quick Day Buttons -->
+          <div class="badge-group" id="date-quick-badges" style="margin-top: 4px;">
+            <button class="chip-btn active" id="date-btn-all">All Days</button>
+            <button class="chip-btn" id="date-btn-w1">Aug 23-27</button>
+            <button class="chip-btn" id="date-btn-w2">Aug 28-31</button>
+            <button class="chip-btn" id="date-btn-w3">Sep 01-05</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Min/Max Look Angle Slider -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Look Angle Range (°)</span>
+          <span class="filter-val-badge" id="val-look">18° - 36°</span>
+        </div>
+        <div class="range-container">
+          <div class="range-inputs">
+            <input type="number" id="num-look-min" class="range-num-input" value="18" min="15" max="40" step="0.5">
+            <input type="range" id="slider-look-min" class="range-slider-track" value="18" min="15" max="40" step="0.5">
+            <input type="range" id="slider-look-max" class="range-slider-track" value="36" min="15" max="40" step="0.5">
+            <input type="number" id="num-look-max" class="range-num-input" value="36" min="15" max="40" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <!-- Target Coverage % Slider -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Target Area Covered (%)</span>
+          <span class="filter-val-badge" id="val-coverage">0% - 100%</span>
+        </div>
+        <div class="range-container">
+          <div class="range-inputs">
+            <input type="number" id="num-cov-min" class="range-num-input" value="0" min="0" max="100">
+            <input type="range" id="slider-cov-min" class="range-slider-track" value="0" min="0" max="100">
+            <span style="color: var(--text-dim);">to</span>
+            <input type="number" id="num-cov-max" class="range-num-input" value="100" min="0" max="100">
+          </div>
+        </div>
+      </div>
+
+      <!-- Off-Nadir Observation Angle (OZA) -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Off-Nadir Angle OZA (°)</span>
+          <span class="filter-val-badge" id="val-oza">15° - 45°</span>
+        </div>
+        <div class="range-container">
+          <div class="range-inputs">
+            <input type="range" id="slider-oza-max" class="range-slider-track" value="45" min="15" max="50" step="0.5">
+            <span class="filter-val-badge" id="lbl-oza-max">&le; 45.0°</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Solar Zenith Angle SZA -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Solar Zenith Angle SZA (°)</span>
+          <span class="filter-val-badge" id="val-sza">All Day/Night</span>
+        </div>
+        <div class="badge-group">
+          <button class="chip-btn active" id="sza-all">All Times</button>
+          <button class="chip-btn" id="sza-day">Daylight (SZA &lt; 85°)</button>
+          <button class="chip-btn" id="sza-night">Night (SZA &ge; 85°)</button>
+        </div>
+      </div>
+
+      <!-- Search Input -->
+      <div class="filter-group">
+        <div class="filter-title" style="margin-bottom: 8px;">Search Opportunity ID</div>
+        <input type="text" id="search-id" class="range-num-input" style="width: 100%; text-align: left; padding: 8px 12px;" placeholder="e.g. 15, Spotlight, ASC...">
+      </div>
+
+    </aside>
+
+    <!-- CENTER AREA (MAP + BOTTOM DRAWER) -->
+    <main class="center-content">
+      
+      <!-- Leaflet Map Div -->
+      <div id="map"></div>
+
+      <!-- Floating Map Control Overlays -->
+      <div class="map-floating-overlay">
+        <!-- Base Map Selector -->
+        <div class="layer-toggle-group">
+          <button class="layer-btn active" id="base-satellite">Satellite</button>
+          <button class="layer-btn" id="base-dark">Dark Map</button>
+          <button class="layer-btn" id="base-topo">Topographic</button>
+        </div>
+
+        <!-- Layer Visibility Toggles -->
+        <div class="layer-toggle-group">
+          <button class="layer-btn active" id="toggle-aoi">AOI Boundary</button>
+          <button class="layer-btn active" id="toggle-swaths">Swaths</button>
+        </div>
+      </div>
+
+      <!-- BOTTOM SPLIT DRAWER -->
+      <div class="bottom-drawer" id="bottom-drawer">
+        <!-- Physical In-Flow Drag-to-Resize Bar -->
+        <div class="drawer-resizer-bar" id="drawer-resize-handle" title="Click and drag up/down to vertically resize bottom panel">
+          <div class="resizer-pill"></div>
+        </div>
+
+        <div class="drawer-tabs">
+          <div class="tab-list">
+            <button class="tab-btn active" data-tab="tab-timeline">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 002-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              Gantt Acquisition Schedule
+            </button>
+            <button class="tab-btn" data-tab="tab-analytics">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+              Look Angle Network
+            </button>
+            <button class="tab-btn" data-tab="tab-table">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              Opportunity Table (<span id="table-count">124</span>)
+            </button>
+          </div>
+
+          <div class="drawer-actions">
+            <button class="drawer-toggle-btn" id="btn-maximize-drawer" title="Toggle Expanded / Restored Height">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+            </button>
+            <button class="drawer-toggle-btn" id="btn-toggle-drawer" title="Collapse / Expand">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 1: GANTT TIMELINE -->
+        <div class="drawer-tab-content active" id="tab-timeline">
+          <div id="gantt-container">
+            <!-- Timeline SVG or canvas rendered via app.js -->
+          </div>
+        </div>
+
+        <!-- TAB 2: LOOK ANGLE VS DATE NETWORK CHART -->
+        <div class="drawer-tab-content" id="tab-analytics">
+          <div class="network-chart-container">
+            <!-- Chart Controls Bar -->
+            <div class="network-chart-toolbar">
+              <!-- Network Toggles -->
+              <div class="toolbar-section">
+                <span class="toolbar-label">Opposite-Pass Networks:</span>
+                <button class="network-badge-btn active net-ascleft-descright" id="toggle-net-1" title="Ascending Left to Descending Right pairs">
+                  <span class="net-dot" style="background: #06b6d4;"></span>
+                  <span>Asc Left ↔ Desc Right</span>
+                  <span class="net-count" id="count-net-1">0 pairs</span>
+                </button>
+                <button class="network-badge-btn active net-descleft-ascright" id="toggle-net-2" title="Descending Left to Ascending Right pairs">
+                  <span class="net-dot" style="background: #f59e0b;"></span>
+                  <span>Desc Left ↔ Asc Right</span>
+                  <span class="net-count" id="count-net-2">0 pairs</span>
+                </button>
+              </div>
+
+              <!-- Connection Pairing Rules -->
+              <div class="toolbar-section">
+                <span class="toolbar-label">Pairing Logic:</span>
+                <div class="btn-group-segmented">
+                  <button class="seg-btn active" id="mode-strict-chain" title="Connect each acquisition to the immediately next chronological acquisition of opposite type">Strict Chain</button>
+                  <button class="seg-btn" id="mode-time-window" title="Connect all opposite-type acquisitions within a maximum time difference">Max Time Window</button>
+                  <button class="seg-btn" id="mode-monitoring-network" title="Non-redundant monitoring network covering full date range without bottleneck clustering">Monitoring Network</button>
+                </div>
+                
+                <!-- Time Window Controls (visible when mode-time-window is active) -->
+                <div id="time-window-ctrls" style="display: none; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Within:</span>
+                  <select id="select-max-days" class="range-num-input" style="width: auto; padding: 3px 6px; font-size: 0.75rem; cursor: pointer;">
+                    <option value="1">1 Day (24h)</option>
+                    <option value="2">2 Days (48h)</option>
+                    <option value="3" selected>3 Days (72h)</option>
+                    <option value="5">5 Days (120h)</option>
+                    <option value="7">7 Days (168h)</option>
+                    <option value="14">14 Days (Full window)</option>
+                  </select>
+                </div>
+
+                <!-- Monitoring Network Controls (visible when mode-monitoring-network is active) -->
+                <div id="monitoring-ctrls" style="display: none; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">&lt;12h Pref:</span>
+                  <select id="select-monitoring-pref" class="range-num-input" style="width: auto; padding: 3px 6px; font-size: 0.75rem; cursor: pointer;" title="Preference rule when multiple candidate acquisitions exist under 12 hours">
+                    <option value="HIGHEST_LOOK_ANGLE" selected>Highest Mean Look Angle</option>
+                    <option value="LOWEST_TIME_DIFF">Lowest Time Difference (Δt)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Line Labels Toggle -->
+              <div class="toolbar-section">
+                <label class="custom-checkbox-label" title="Show Δt, Look Diff, and Shared Area text directly on connecting lines">
+                  <input type="checkbox" id="chk-show-line-labels">
+                  <span>Show Line Labels</span>
+                </label>
+              </div>
+
+              <!-- Time Lapse Viewer KPIs -->
+              <div class="toolbar-section" id="time-lapse-viewer" style="display: flex; align-items: center; gap: 6px;">
+                <span class="toolbar-label">Time Gap Stats:</span>
+                <span class="filter-val-badge" id="stat-max-lapse" style="background: rgba(6, 182, 212, 0.12); color: #22d3ee;" title="Maximum time gap between paired acquisitions">Max Δt: --</span>
+                <span class="filter-val-badge" id="stat-mean-lapse" style="background: rgba(245, 158, 11, 0.12); color: #fbbf24;" title="Average (mean) time gap between paired acquisitions">Mean Δt: --</span>
+              </div>
+
+              <!-- Export Excel Button -->
+              <div class="toolbar-section" style="margin-left: auto;">
+                <button class="btn btn-primary" id="btn-export-network-xlsx" onclick="window.exportNetworkPairsXLSX &amp;&amp; window.exportNetworkPairsXLSX()" title="Download Excel workbook with paired network characteristics">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  Export Pairs (.xlsx)
+                </button>
+              </div>
+            </div>
+
+            <!-- Chart Body & Dynamic SVG Canvas -->
+            <div class="network-chart-body">
+              <div class="svg-chart-wrapper" id="network-svg-wrapper">
+                <!-- Vector SVG rendered dynamically -->
+              </div>
+              
+              <!-- Inspector Overlay Card for Selected Pair / Point -->
+              <div class="network-inspector-card" id="network-inspector" style="display: none;">
+                <div class="inspector-header">
+                  <span id="inspector-title" style="font-weight: 600; color: #fff;">Pair Details</span>
+                  <button class="inspector-close" id="inspector-close">&times;</button>
+                </div>
+                <div class="inspector-body" id="inspector-content">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Legend -->
+            <div class="network-chart-legend">
+              <div class="legend-item"><span class="legend-marker marker-desc-left">◀</span> <span class="legend-text"><b>Descending left</b> (Look East)</span></div>
+              <div class="legend-item"><span class="legend-marker marker-desc-right">▶</span> <span class="legend-text"><b>Descending right</b> (Look West)</span></div>
+              <div class="legend-item"><span class="legend-marker marker-asc-left">◀</span> <span class="legend-text"><b>Ascending left</b> (Look West)</span></div>
+              <div class="legend-item"><span class="legend-marker marker-asc-right">▶</span> <span class="legend-text"><b>Ascending right</b> (Look East)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: DATA TABLE -->
+        <div class="drawer-tab-content" id="tab-table">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 30px;"><input type="checkbox" id="chk-select-all"></th>
+                  <th>ID</th>
+                  <th>Start Time (UTC)</th>
+                  <th>Pass &amp; Look Combo</th>
+                  <th>Sensor Mode</th>
+                  <th>Incidence Angle</th>
+                  <th>OZA</th>
+                  <th>SZA</th>
+                  <th>Azimuth</th>
+                  <th>Area Covered</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ==================== SIDE-BY-SIDE COMPARISON MODAL ==================== -->
+  <div class="modal-overlay" id="modal-compare">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Side-by-Side Acquisition Opportunity Evaluation</h2>
+        <button class="drawer-toggle-btn" id="btn-close-compare" style="font-size: 1.5rem;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="comparison-grid" id="compare-grid">
+          <!-- Dynamically populated comparison cards -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== IMPORT DATA MODAL ==================== -->
+  <div class="modal-overlay" id="modal-import" style="display: none;">
+    <div class="modal-card import-modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Import Acquisition Campaign Data</h2>
+        <button class="drawer-toggle-btn" id="btn-close-import" style="font-size: 1.5rem;">&times;</button>
+      </div>
+      <div class="modal-body import-modal-body">
+        <div class="import-form-group">
+          <label class="import-label">Campaign Name / AOI Region Name:</label>
+          <input type="text" id="import-aoi-name" class="range-num-input import-text-input" placeholder="e.g. Patagonia Icefield 2027">
+        </div>
+
+        <div class="import-dropzones">
+          <!-- Excel Dropzone -->
+          <div class="dropzone" id="dropzone-excel">
+            <input type="file" id="file-excel" accept=".xlsx, .xls" style="display: none;">
+            <div class="dropzone-icon">📊</div>
+            <div class="dropzone-title">Excel Feasibility Report (.xlsx) <span class="required-badge">*Required</span></div>
+            <div class="dropzone-sub" id="label-excel-status">Drag &amp; drop or click to browse</div>
+          </div>
+
+          <!-- KML Dropzone -->
+          <div class="dropzone" id="dropzone-kml">
+            <input type="file" id="file-kml" accept=".kml" style="display: none;">
+            <div class="dropzone-icon">🗺️</div>
+            <div class="dropzone-title">Swaths Polygon KML (.kml) <span class="optional-badge">Optional</span></div>
+            <div class="dropzone-sub" id="label-kml-status">Drag &amp; drop or click to browse</div>
+          </div>
+        </div>
+
+        <div class="import-form-group" style="margin-top: 14px;">
+          <label class="import-label">Custom AOI Boundary (Optional .kml / .geojson):</label>
+          <input type="file" id="file-aoi-poly" accept=".kml, .geojson, .json" class="range-num-input import-file-input">
+        </div>
+
+        <div id="import-status-msg" class="import-status-msg" style="display: none;"></div>
+
+        <div class="import-actions">
+          <button class="btn" id="btn-cancel-import">Cancel</button>
+          <button class="btn btn-primary" id="btn-submit-import">
+            ⚡ Parse &amp; Launch Campaign
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Floating Chart Tooltip -->
+  <div id="chart-floating-tooltip" class="chart-floating-tooltip"></div>
+
+  <!-- Embedded Data for Instant Zero-CORS Loading -->
+  <script src="data_embedded.js?v=11"></script>
+
+  <!-- App Script -->
+  <script src="app.js?v=11"></script>
+</body>
+</html>
