@@ -4,11 +4,35 @@ import argparse
 import pandas as pd
 import xml.etree.ElementTree as ET
 
+def detect_orbit_type(pass_type, look_dir, azimuth):
+    """
+    Detect whether the acquisition is from Sun-Synchronous Orbit (SSO) or Mid-Inclination Orbit (MIO)
+    based on acquisition pointing azimuth and pass/look geometry.
+    """
+    pass_upper = str(pass_type).upper()
+    look_upper = str(look_dir).upper()
+    az = float(azimuth)
+    
+    if pass_upper == "ASCENDING":
+        if "LEFT" in look_upper:
+            return "SSO" if az < 110 else "MIO"
+        else:  # RIGHT
+            return "SSO" if az < 290 else "MIO"
+    else:  # DESCENDING
+        if "LEFT" in look_upper:
+            return "SSO" if az > 250 else "MIO"
+        else:  # RIGHT
+            return "SSO" if az > 70 else "MIO"
+
 def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_polygon=None, output_json="acquisitions_data.json", output_js="data_embedded.js"):
     if not excel_path:
-        excel_path = "CS-27201 Spot 23 Aug - 5 Sep_FeasibilityStudy.xlsx"
+        excel_path = "CS-27314_SLEA_1-14Sept_FeasibilityStudy.xlsx"
+        if not os.path.exists(excel_path):
+            excel_path = "CS-27201 Spot 23 Aug - 5 Sep_FeasibilityStudy.xlsx"
     if not kml_path:
-        kml_path = "CS-27201 Spot 23 Aug - 5 Sep_FeasibilityStudy.kml"
+        kml_path = "CS-27314_SLEA_1-14Sept_FeasibilityStudy.kml"
+        if not os.path.exists(kml_path):
+            kml_path = "CS-27201 Spot 23 Aug - 5 Sep_FeasibilityStudy.kml"
         
     # Read Excel dataframe
     df = pd.read_excel(excel_path)
@@ -97,6 +121,9 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_po
         pass_look_combo = f"{pass_str} - {look_dir}"
         combo_set.add(pass_look_combo)
         
+        azimuth_val = round(float(row.get('Azimuth', 0)), 2)
+        orbit_type = detect_orbit_type(pass_str, look_dir, azimuth_val)
+        
         opp_dict = {
             "id": opp_id,
             "region": str(row.get('Region', aoi_name or 'Target Region')),
@@ -105,6 +132,7 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_po
             "look_direction": look_dir,
             "pass": pass_str,
             "pass_look_combo": pass_look_combo,
+            "orbit_type": orbit_type,
             "start": start_iso,
             "end": end_iso,
             "date": date_str,
@@ -119,7 +147,7 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_po
             "oza": round(float(row.get('OZA', 0)), 2),
             "sza": round(float(row.get('SZA', 0)), 2),
             "look_angle": round(float(row.get('LookAngle', 0)), 2),
-            "azimuth": round(float(row.get('Azimuth', 0)), 2),
+            "azimuth": azimuth_val,
             "min_incid": round(float(row.get('Min_Incid', 0)), 2),
             "max_incid": round(float(row.get('Max_Incid', 0)), 2),
             "coordinates": coords
@@ -155,6 +183,7 @@ def parse_feasibility_data(excel_path=None, kml_path=None, aoi_name=None, aoi_po
             "sensor_types": sorted(list(set(df['Sensor'].astype(str)))),
             "pass_types": sorted(list(set(df['Pass'].astype(str)))),
             "look_directions": ["LEFT", "RIGHT"],
+            "orbit_types": ["MIO", "SSO"],
             "pass_look_combos": sorted(list(combo_set)),
             "unique_dates": sorted(list(set(date_list))),
             "polarizations": sorted(list(set(df['Polarization'].astype(str)))),

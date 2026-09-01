@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   
   <!-- App Styles -->
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=15">
   
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -101,6 +101,19 @@
           <button class="chip-btn" id="preset-highlook">Look Angle &ge; 30°</button>
           <button class="chip-btn" id="preset-west-looking" title="Ascending Left + Descending Right (Look West)">West Looking (Asc L / Desc R)</button>
           <button class="chip-btn" id="preset-east-looking" title="Ascending Right + Descending Left (Look East)">East Looking (Asc R / Desc L)</button>
+          <button class="chip-btn" id="preset-sso" title="Filter for Sun-Synchronous Orbit (SSO) acquisitions">☀️ SSO Only</button>
+          <button class="chip-btn" id="preset-mio" title="Filter for Mid-Inclination Orbit (MIO) acquisitions">🌍 MIO Only</button>
+        </div>
+      </div>
+
+      <!-- Orbit Type (SSO / MIO) Multi-select Filter -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Orbit Type</span>
+        </div>
+        <div class="badge-group" id="orbit-badge-group">
+          <button class="chip-btn orbit-btn sso active" data-orbit="SSO" title="Sun-Synchronous Orbit (~97.7° inclination, polar retrograde)">☀️ Sun-Synchronous (SSO)</button>
+          <button class="chip-btn orbit-btn mio active" data-orbit="MIO" title="Mid-Inclination Orbit (~45°-53° inclination)">🌍 Mid-Inclination (MIO)</button>
         </div>
       </div>
 
@@ -203,6 +216,18 @@
         </div>
       </div>
 
+      <!-- Map Overlays Filter Group -->
+      <div class="filter-group">
+        <div class="filter-label-row">
+          <span class="filter-title">Map Display Layers</span>
+        </div>
+        <div class="badge-group">
+          <button class="chip-btn active" id="btn-toggle-arrows-sidebar" title="Click to activate / deactivate Look Direction Arrow Overlays on the Map">
+            🧭 Look Arrows: <b>ON</b>
+          </button>
+        </div>
+      </div>
+
       <!-- Search Input -->
       <div class="filter-group">
         <div class="filter-title" style="margin-bottom: 8px;">Search Opportunity ID</div>
@@ -230,6 +255,7 @@
         <div class="layer-toggle-group">
           <button class="layer-btn active" id="toggle-aoi">AOI Boundary</button>
           <button class="layer-btn active" id="toggle-swaths">Swaths</button>
+          <button class="layer-btn active" id="toggle-arrows" title="Click to activate / deactivate Look Direction Arrow Overlays">🧭 Look Arrows</button>
         </div>
       </div>
 
@@ -386,6 +412,7 @@
                   <th style="width: 30px;"><input type="checkbox" id="chk-select-all"></th>
                   <th>ID</th>
                   <th>Start Time (UTC)</th>
+                  <th>Orbit Type</th>
                   <th>Pass &amp; Look Combo</th>
                   <th>Sensor Mode</th>
                   <th>Incidence Angle</th>
@@ -475,7 +502,10 @@
   <!-- Interactive Floating Chart Tooltip -->
   <div id="chart-floating-tooltip" class="chart-floating-tooltip"></div>
 
+  <!-- Embedded Data (if precompiled) -->
+  <script src="data_embedded.js"></script>
+
   <!-- App Script -->
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

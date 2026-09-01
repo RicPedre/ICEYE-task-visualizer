@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let map = null;
   let swathLayerGroup = L.layerGroup();
+  let lookArrowLayerGroup = L.layerGroup();
+  let showLookArrows = true;
   let aoiLayerGroup = L.layerGroup();
   let intersectionLayerGroup = L.layerGroup();
   let leafletLayersMap = new Map(); // id -> L.Polygon
@@ -19,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentBaseLayer = null;
 
   let activeFilters = {
+    orbitTypes: new Set(['SSO', 'MIO']),
     combos: new Set(['ASCENDING - LEFT', 'ASCENDING - RIGHT', 'DESCENDING - LEFT', 'DESCENDING - RIGHT']),
     startDate: '2026-08-23',
     endDate: '2026-09-05',
@@ -30,6 +33,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     szaMode: 'ALL',
     searchQuery: ''
   };
+
+  // Helper: Detect SSO vs MIO Orbit Type from Azimuth and Pass/Look geometry
+  function detectOrbitType(passType, lookDir, azimuth) {
+    const passUpper = String(passType || '').toUpperCase();
+    const lookUpper = String(lookDir || '').toUpperCase();
+    const az = parseFloat(azimuth || 0);
+
+    if (passUpper === 'ASCENDING') {
+      if (lookUpper.includes('LEFT')) {
+        return az < 110 ? 'SSO' : 'MIO';
+      } else {
+        return az < 290 ? 'SSO' : 'MIO';
+      }
+    } else { // DESCENDING
+      if (lookUpper.includes('LEFT')) {
+        return az > 250 ? 'SSO' : 'MIO';
+      } else {
+        return az > 70 ? 'SSO' : 'MIO';
+      }
+    }
+  }
 
   // Opposite-Type Network Settings
   let networkSettings = {
@@ -51,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // On launch, invite user to drag & drop files if no dataset is active
   const savedCampaigns = getSavedCampaigns();
-  if (Object.keys(savedCampaigns).length === 0) {
+  if (Object.keys(savedCampaigns).length === 0 && !window.ACQUISITIONS_EMBEDDED_DATA && allOpportunities.length === 0) {
     const modalImport = document.getElementById('modal-import');
     if (modalImport) modalImport.style.display = 'flex';
   }
@@ -66,7 +90,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         data = saved[campaignId];
       } else if (savedKeys.length > 0) {
         data = saved[savedKeys[savedKeys.length - 1]];
+      } else if (window.ACQUISITIONS_EMBEDDED_DATA) {
+        data = window.ACQUISITIONS_EMBEDDED_DATA;
       } else {
+        try {
+          const resp = await fetch('acquisitions_data.json');
+          if (resp.ok) {
+            data = await resp.json();
+          }
+        } catch (e) {}
+      }
+
+      if (!data) {
         // Clean empty state (No default campaign preloaded)
         data = {
           metadata: {
@@ -79,6 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sza_range: [0, 90],
             azimuth_range: [0, 360],
             coverage_range: [0, 100],
+            orbit_types: ['MIO', 'SSO'],
             pass_look_combos: ['ASCENDING - LEFT', 'ASCENDING - RIGHT', 'DESCENDING - LEFT', 'DESCENDING - RIGHT']
           },
           geojson: { type: "FeatureCollection", features: [] },
@@ -254,6 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentBaseLayer.addTo(map);
 
     swathLayerGroup.addTo(map);
+    lookArrowLayerGroup.addTo(map);
     aoiLayerGroup.addTo(map);
     intersectionLayerGroup.addTo(map);
 
@@ -271,9 +308,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Render Swath Polygons on Leaflet Map
+  // Render Swath Polygons and Look Direction Arrows on Leaflet Map
   function renderMapSwaths() {
     swathLayerGroup.clearLayers();
+    lookArrowLayerGroup.clearLayers();
     leafletLayersMap.clear();
 
     const listToRender = isolatedPair 
@@ -299,12 +337,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         fillOpacity: fillOpacity
       });
 
+      const orbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+      const orbitLabel = orbitType === 'SSO' ? '☀️ SSO (Sun-Synchronous)' : '🌍 MIO (Mid-Inclination)';
+
       // Tooltip Card
       const tooltipContent = `
         <div style="font-family: Inter, sans-serif; font-size: 12px; line-height: 1.4;">
           <div style="font-weight: 700; color: #fff; margin-bottom: 2px;">
             Opportunity ID #${opp.id} (${opp.pass_look_combo})
           </div>
+          <div><b>Orbit Type:</b> <span style="color: ${orbitType === 'SSO' ? '#fcd34d' : '#38bdf8'}; font-weight:600;">${orbitLabel}</span> | <b>Azimuth:</b> ${opp.azimuth}°</div>
           <div><b>Date:</b> ${opp.date} (${new Date(opp.start).toUTCString().replace('GMT', 'UTC')})</div>
           <div><b>Sensor:</b> ${opp.sensor}</div>
           <div><b>Look Angle:</b> ${opp.look_angle}° | <b>Incidence:</b> ${opp.min_incid}° - ${opp.max_incid}°</div>
@@ -322,12 +364,95 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       poly.addTo(swathLayerGroup);
       leafletLayersMap.set(opp.id, poly);
+
+      // Render Look Direction Arrow Marker Overlay (if active)
+      if (showLookArrows) {
+        let centerLat = opp.center_lat;
+        let centerLon = opp.center_lon;
+        if (!centerLat || !centerLon) {
+          const pts = opp.coordinates;
+          centerLat = pts.reduce((sum, p) => sum + p[1], 0) / pts.length;
+          centerLon = pts.reduce((sum, p) => sum + p[0], 0) / pts.length;
+        }
+
+        // Pointing azimuth of radar illumination beam across ground:
+        // In ICEYE metadata, azimuth is line-of-sight from target to satellite.
+        // Beam illumination look direction across ground points towards (azimuth + 180) % 360.
+        const lookBearing = (parseFloat(opp.azimuth || 0) + 180) % 360;
+        const arrowColor = isSelected ? '#f43f5e' : (isOppInIsolated ? baseColor : '#ffffff');
+        const strokeBg = '#0b0f19';
+
+        const iconHtml = `
+          <div class="look-arrow-container ${isSelected ? 'selected' : ''}" title="ID #${opp.id} Look Direction: ${Math.round(lookBearing)}° (${opp.look_direction})">
+            <svg class="look-arrow-svg" style="transform: rotate(${lookBearing}deg);" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 23 L14 7" stroke="${strokeBg}" stroke-width="5" stroke-linecap="round"/>
+              <path d="M7 13 L14 5 L21 13" fill="none" stroke="${strokeBg}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 23 L14 7" stroke="${arrowColor}" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M7 13 L14 5 L21 13" fill="none" stroke="${arrowColor}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        `;
+
+        const arrowIcon = L.divIcon({
+          className: 'look-arrow-icon',
+          html: iconHtml,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+
+        const arrowMarker = L.marker([centerLat, centerLon], {
+          icon: arrowIcon,
+          zIndexOffset: isSelected ? 1200 : 300
+        });
+
+        arrowMarker.bindTooltip(tooltipContent, { sticky: true });
+        arrowMarker.on('click', (e) => {
+          if (e && e.originalEvent) e.originalEvent.stopPropagation();
+          toggleSelectOpportunity(opp.id);
+        });
+
+        arrowMarker.addTo(lookArrowLayerGroup);
+      }
     });
+  }
+
+  // Look Direction Arrows Visibility Controller
+  function setLookArrowsVisibility(visible) {
+    showLookArrows = !!visible;
+    const mapBtn = document.getElementById('toggle-arrows');
+    const sideBtn = document.getElementById('btn-toggle-arrows-sidebar');
+
+    if (mapBtn) {
+      mapBtn.classList.toggle('active', showLookArrows);
+      mapBtn.innerHTML = showLookArrows ? '🧭 Look Arrows' : '🚫 No Arrows';
+    }
+    if (sideBtn) {
+      sideBtn.classList.toggle('active', showLookArrows);
+      sideBtn.innerHTML = `🧭 Look Arrows: <b>${showLookArrows ? 'ON' : 'OFF'}</b>`;
+    }
+
+    if (showLookArrows) {
+      if (!map.hasLayer(lookArrowLayerGroup)) {
+        lookArrowLayerGroup.addTo(map);
+      }
+      renderMapSwaths();
+    } else {
+      lookArrowLayerGroup.clearLayers();
+      if (map.hasLayer(lookArrowLayerGroup)) {
+        map.removeLayer(lookArrowLayerGroup);
+      }
+    }
   }
 
   // Filter Engine
   function applyFilters() {
     filteredOpportunities = allOpportunities.filter(opp => {
+      // 0. Orbit Type filter (SSO / MIO)
+      const oppOrbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+      if (activeFilters.orbitTypes && !activeFilters.orbitTypes.has(oppOrbitType)) {
+        return false;
+      }
+
       // 1. Pass & Look Combination filter
       if (!activeFilters.combos.has(opp.pass_look_combo)) {
         return false;
@@ -416,12 +541,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const badgeClass = getComboBadgeClass(opp.pass_look_combo);
       const symbol = opp.pass_look_combo.includes('LEFT') ? '◀' : '▶';
 
+      const orbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+      const orbitBadgeClass = orbitType === 'SSO' ? 'badge-sso' : 'badge-mio';
+      const orbitIcon = orbitType === 'SSO' ? '☀️' : '🌍';
+
       const dateStr = new Date(opp.start).toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
 
       tr.innerHTML = `
         <td><input type="checkbox" class="chk-opp" data-id="${opp.id}" ${isSelected ? 'checked' : ''}></td>
         <td style="font-weight: 700; font-family: 'JetBrains Mono', monospace;">#${opp.id}</td>
         <td>${dateStr}</td>
+        <td><span class="badge-pass ${orbitBadgeClass}">${orbitIcon} ${orbitType}</span></td>
         <td><span class="badge-pass ${badgeClass}">${symbol} ${opp.pass_look_combo}</span></td>
         <td>${opp.sensor}</td>
         <td style="font-family: 'JetBrains Mono', monospace;">${opp.min_incid}° - ${opp.max_incid}°</td>
@@ -567,7 +697,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       bar.style.cursor = 'pointer';
       bar.style.boxShadow = isSelected ? '0 0 8px #f43f5e' : 'none';
 
-      bar.title = `ID #${opp.id} | ${opp.pass_look_combo} | ${opp.sensor} | Incid: ${opp.min_incid}° | Cov: ${opp.area_covered_pct}%`;
+      const orbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+      bar.title = `ID #${opp.id} | [${orbitType}] ${opp.pass_look_combo} | ${opp.sensor} | Incid: ${opp.min_incid}° | Cov: ${opp.area_covered_pct}%`;
 
       bar.addEventListener('click', () => {
         zoomToOpportunity(opp.id);
@@ -582,7 +713,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       label.style.fontSize = '11px';
       label.style.color = 'var(--text-muted)';
       label.style.whiteSpace = 'nowrap';
-      label.textContent = `#${opp.id} (${opp.pass_look_combo}) ${opp.look_angle}°`;
+      label.textContent = `#${opp.id} [${orbitType}] (${opp.pass_look_combo}) ${opp.look_angle}°`;
       row.appendChild(label);
 
       timelineWrapper.appendChild(row);
@@ -1186,10 +1317,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Smooth, Glitch-Free Hover Tooltip
       poly.addEventListener('mouseenter', (e) => {
         const symbol = opp.pass_look_combo.includes('LEFT') ? '◀' : '▶';
+        const orbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+        const orbitLabel = orbitType === 'SSO' ? '☀️ SSO (Sun-Synchronous)' : '🌍 MIO (Mid-Inclination)';
         const html = `
           <div class="chart-floating-tooltip-title">Opportunity #${opp.id}</div>
+          <div><b>Orbit Type:</b> <span style="color:${orbitType === 'SSO' ? '#fcd34d' : '#38bdf8'};font-weight:700;">${orbitLabel}</span></div>
           <div><b>Combo:</b> ${symbol} ${opp.pass_look_combo}</div>
           <div><b>Look Angle:</b> <span style="color:#f59e0b;font-weight:700;">${opp.look_angle}°</span></div>
+          <div><b>Azimuth:</b> ${opp.azimuth}°</div>
           <div><b>Date:</b> ${opp.date} (${new Date(opp.start).toUTCString().substring(17, 22)} UTC)</div>
           <div><b>Sensor Mode:</b> ${opp.sensor}</div>
           <div><b>Target Coverage:</b> <span style="color:#10b981;font-weight:700;">${opp.area_covered_pct}%</span> (${opp.target_in_image_km2} km²)</div>
@@ -1230,10 +1365,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const content = document.getElementById('inspector-content');
     if (!card || !content) return;
 
+    const opp1Orbit = pair.opp1.orbit_type || detectOrbitType(pair.opp1.pass, pair.opp1.look_direction, pair.opp1.azimuth);
+    const opp2Orbit = pair.opp2.orbit_type || detectOrbitType(pair.opp2.pass, pair.opp2.look_direction, pair.opp2.azimuth);
+
     title.textContent = `${pair.networkName}`;
     content.innerHTML = `
       <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-        Pair: <span style="color:#38bdf8;">#${pair.opp1.id}</span> (${pair.opp1.pass_look_combo}) ↔ <span style="color:#f59e0b;">#${pair.opp2.id}</span> (${pair.opp2.pass_look_combo})
+        Pair: <span style="color:#38bdf8;">#${pair.opp1.id} [${opp1Orbit}]</span> (${pair.opp1.pass_look_combo}) ↔ <span style="color:#f59e0b;">#${pair.opp2.id} [${opp2Orbit}]</span> (${pair.opp2.pass_look_combo})
       </div>
       <div class="inspector-metric-grid">
         <div class="inspector-metric-box">
@@ -1353,6 +1491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'Network_Name',
         'Pair_Index',
         'Opp1_ID',
+        'Opp1_Orbit_Type',
         'Opp1_Date',
         'Opp1_Start_UTC',
         'Opp1_Pass_Look_Combo',
@@ -1360,6 +1499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'Opp1_Look_Angle_deg',
         'Opp1_Coverage_pct',
         'Opp2_ID',
+        'Opp2_Orbit_Type',
         'Opp2_Date',
         'Opp2_Start_UTC',
         'Opp2_Pass_Look_Combo',
@@ -1375,10 +1515,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
 
     pairsToExport.forEach((pair, idx) => {
+      const opp1Orbit = pair.opp1.orbit_type || detectOrbitType(pair.opp1.pass, pair.opp1.look_direction, pair.opp1.azimuth);
+      const opp2Orbit = pair.opp2.orbit_type || detectOrbitType(pair.opp2.pass, pair.opp2.look_direction, pair.opp2.azimuth);
       rows.push([
         pair.networkName,
         idx + 1,
         pair.opp1.id,
+        opp1Orbit,
         pair.opp1.date,
         pair.opp1.start,
         pair.opp1.pass_look_combo,
@@ -1386,6 +1529,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         pair.opp1.look_angle,
         pair.opp1.area_covered_pct,
         pair.opp2.id,
+        opp2Orbit,
         pair.opp2.date,
         pair.opp2.start,
         pair.opp2.pass_look_combo,
@@ -1455,6 +1599,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.target.classList.toggle('active');
       if (map.hasLayer(swathLayerGroup)) map.removeLayer(swathLayerGroup);
       else swathLayerGroup.addTo(map);
+    });
+
+    const toggleArrowsBtn = document.getElementById('toggle-arrows');
+    if (toggleArrowsBtn) {
+      toggleArrowsBtn.addEventListener('click', () => {
+        setLookArrowsVisibility(!showLookArrows);
+      });
+    }
+
+    const sideToggleArrowsBtn = document.getElementById('btn-toggle-arrows-sidebar');
+    if (sideToggleArrowsBtn) {
+      sideToggleArrowsBtn.addEventListener('click', () => {
+        setLookArrowsVisibility(!showLookArrows);
+      });
+    }
+
+    // Orbit Type (SSO / MIO) Badges
+    document.querySelectorAll('#orbit-badge-group .orbit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const orbit = btn.dataset.orbit;
+        if (activeFilters.orbitTypes.has(orbit)) {
+          if (activeFilters.orbitTypes.size > 1) {
+            activeFilters.orbitTypes.delete(orbit);
+            btn.classList.remove('active');
+          }
+        } else {
+          activeFilters.orbitTypes.add(orbit);
+          btn.classList.add('active');
+        }
+        applyFilters();
+      });
     });
 
     // Pass & Look Direction Combo Badges
@@ -1636,9 +1811,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
+    // Quick Presets for Orbit Types (SSO / MIO)
+    const presetSSO = document.getElementById('preset-sso');
+    if (presetSSO) {
+      presetSSO.addEventListener('click', () => {
+        activeFilters.orbitTypes = new Set(['SSO']);
+        document.querySelectorAll('#orbit-badge-group .orbit-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.orbit === 'SSO');
+        });
+        applyFilters();
+      });
+    }
+
+    const presetMIO = document.getElementById('preset-mio');
+    if (presetMIO) {
+      presetMIO.addEventListener('click', () => {
+        activeFilters.orbitTypes = new Set(['MIO']);
+        document.querySelectorAll('#orbit-badge-group .orbit-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.orbit === 'MIO');
+        });
+        applyFilters();
+      });
+    }
+
     // Reset All Filters
     document.getElementById('btn-reset-filters').addEventListener('click', () => {
       activeFilters = {
+        orbitTypes: new Set(['SSO', 'MIO']),
         combos: new Set(['ASCENDING - LEFT', 'ASCENDING - RIGHT', 'DESCENDING - LEFT', 'DESCENDING - RIGHT']),
         startDate: '2026-08-23',
         endDate: '2026-09-05',
@@ -1663,7 +1862,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       inputDateStart.value = '2026-08-23';
       inputDateEnd.value = '2026-09-05';
 
+      document.querySelectorAll('#orbit-badge-group .orbit-btn').forEach(b => b.classList.add('active'));
       document.querySelectorAll('#combo-badge-group .combo-btn').forEach(b => b.classList.add('active'));
+      setLookArrowsVisibility(true);
       setDateRange('2026-08-23', '2026-09-05', document.getElementById('date-btn-all'));
       setSzaMode('ALL', document.getElementById('sza-all'));
     });
@@ -1963,12 +2164,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const badgeClass = getComboBadgeClass(opp.pass_look_combo);
         const symbol = opp.pass_look_combo.includes('LEFT') ? '◀' : '▶';
+        const orbitType = opp.orbit_type || detectOrbitType(opp.pass, opp.look_direction, opp.azimuth);
+        const orbitLabel = orbitType === 'SSO' ? '☀️ SSO (Sun-Synchronous)' : '🌍 MIO (Mid-Inclination)';
 
         card.innerHTML = `
           <div class="compare-card-header">
             <span class="compare-card-title">Opportunity #${opp.id}</span>
             <span class="badge-pass ${badgeClass}">${symbol} ${opp.pass_look_combo}</span>
           </div>
+          <div class="compare-prop-row"><span class="compare-prop-label">Orbit Type:</span> <span class="compare-prop-val" style="color: ${orbitType === 'SSO' ? '#fcd34d' : '#38bdf8'}; font-weight:600;">${orbitLabel}</span></div>
           <div class="compare-prop-row"><span class="compare-prop-label">Sensor Mode:</span> <span class="compare-prop-val">${opp.sensor}</span></div>
           <div class="compare-prop-row"><span class="compare-prop-label">Date:</span> <span class="compare-prop-val">${opp.date}</span></div>
           <div class="compare-prop-row"><span class="compare-prop-label">Start Time:</span> <span class="compare-prop-val">${new Date(opp.start).toISOString().replace('T',' ').substring(0,16)}</span></div>
@@ -2000,9 +2204,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const headers = ['Opportunity_ID', 'Date', 'Pass_Look_Combo', 'Pass', 'Look_Direction', 'Sensor', 'Start', 'End', 'LookAngle', 'Min_Incid', 'Max_Incid', 'OZA', 'SZA', 'Azimuth', 'AreaCovered_Pct', 'Target_km2'];
+    const headers = ['Opportunity_ID', 'Orbit_Type', 'Date', 'Pass_Look_Combo', 'Pass', 'Look_Direction', 'Sensor', 'Start', 'End', 'LookAngle', 'Min_Incid', 'Max_Incid', 'OZA', 'SZA', 'Azimuth', 'AreaCovered_Pct', 'Target_km2'];
     const rows = listToExport.map(o => [
-      o.id, o.date, `"${o.pass_look_combo}"`, o.pass, o.look_direction, `"${o.sensor}"`, o.start, o.end, o.look_angle, o.min_incid, o.max_incid, o.oza, o.sza, o.azimuth, o.area_covered_pct, o.target_in_image_km2
+      o.id, o.orbit_type || detectOrbitType(o.pass, o.look_direction, o.azimuth), o.date, `"${o.pass_look_combo}"`, o.pass, o.look_direction, `"${o.sensor}"`, o.start, o.end, o.look_angle, o.min_incid, o.max_incid, o.oza, o.sza, o.azimuth, o.area_covered_pct, o.target_in_image_km2
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -2273,6 +2477,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (row.Polarization) polarizations.add(String(row.Polarization));
 
+      const oppOrbitType = row.Orbit_Type || row.orbit_type || detectOrbitType(passStr, lookDir, azVal);
+
       const oppDict = {
         id: oppId,
         region: String(row.Region || customAoiName || 'Campaign Area'),
@@ -2281,6 +2487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         look_direction: lookDir,
         pass: passStr,
         pass_look_combo: passLookCombo,
+        orbit_type: oppOrbitType,
         start: startIso,
         end: endIso,
         date: dateStr,
@@ -2327,6 +2534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sensor_types: Array.from(sensorTypes).sort(),
         pass_types: Array.from(passTypes).sort(),
         look_directions: ["LEFT", "RIGHT"],
+        orbit_types: ["MIO", "SSO"],
         pass_look_combos: Array.from(comboSet).sort(),
         unique_dates: Array.from(new Set(dateList)).sort(),
         polarizations: Array.from(polarizations).sort(),
